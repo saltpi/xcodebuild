@@ -52,7 +52,27 @@ inputs:
     description: 'Additional xcodebuild build settings as KEY=VALUE pairs, one per line.'
     required: false
   extra-arguments:
-    description: 'Additional arguments passed verbatim to xcodebuild (shell-quoted).'
+    description: 'Additional arguments passed verbatim to xcodebuild (shell-quoted). Also forwarded to -exportArchive unless `export-extra-arguments` is specified.'
+    required: false
+  export-extra-arguments:
+    description: 'Additional arguments passed verbatim to xcodebuild -exportArchive (shell-quoted). Defaults to `extra-arguments` if omitted.'
+    required: false
+  allow-provisioning-updates:
+    description: 'Pass -allowProvisioningUpdates to xcodebuild during build, archive, and export.'
+    required: false
+    default: 'false'
+  allow-provisioning-device-registration:
+    description: 'Pass -allowProvisioningDeviceRegistration to xcodebuild during build, archive, and export. Only takes effect if `allow-provisioning-updates` is true.'
+    required: false
+    default: 'false'
+  authentication-key-path:
+    description: 'Path to an App Store Connect API authentication key (.p8). Passed as -authenticationKeyPath to xcodebuild.'
+    required: false
+  authentication-key-id:
+    description: 'App Store Connect API key ID. Passed as -authenticationKeyID to xcodebuild.'
+    required: false
+  authentication-key-issuer-id:
+    description: 'App Store Connect API issuer ID. Passed as -authenticationKeyIssuerID to xcodebuild.'
     required: false
   output-formatter:
     description: 'Command to pipe xcodebuild output through (e.g. xcbeautify, xcpretty). Set to an empty string to disable. The default uses xcbeautify''s github-actions renderer so compile errors and warnings surface as inline PR annotations.'

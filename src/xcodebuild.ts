@@ -30,9 +30,21 @@ export function validateInputs(opts: {
   archivePath: string
   exportOptionsPlist: string
   cwd: string
+  authenticationKeyPath?: string
+  authenticationKeyId?: string
+  authenticationKeyIssuerId?: string
 }): void {
-  const {workspace, project, xcAction, archivePath, exportOptionsPlist, cwd} =
-    opts
+  const {
+    workspace,
+    project,
+    xcAction,
+    archivePath,
+    exportOptionsPlist,
+    cwd,
+    authenticationKeyPath,
+    authenticationKeyId,
+    authenticationKeyIssuerId
+  } = opts
   const exportOnly = xcAction === 'export'
 
   if (!exportOnly && !workspace && !project) {
@@ -59,6 +71,16 @@ export function validateInputs(opts: {
   if (exportOnly && !existsSync(resolve(cwd, archivePath))) {
     throw new Error(`Archive not found: ${archivePath}`)
   }
+  const authKeyCount = [
+    Boolean(authenticationKeyPath),
+    Boolean(authenticationKeyId),
+    Boolean(authenticationKeyIssuerId)
+  ].filter(Boolean).length
+  if (authKeyCount > 0 && authKeyCount < 3) {
+    throw new Error(
+      'When using App Store Connect API authentication, `authentication-key-path`, `authentication-key-id`, and `authentication-key-issuer-id` must all be provided together.'
+    )
+  }
 }
 
 export function buildXcodebuildArgs(opts: {
@@ -77,6 +99,11 @@ export function buildXcodebuildArgs(opts: {
   buildNumber: string
   buildSettings: string
   extraArguments: string
+  allowProvisioningUpdates?: boolean
+  allowProvisioningDeviceRegistration?: boolean
+  authenticationKeyPath?: string
+  authenticationKeyId?: string
+  authenticationKeyIssuerId?: string
   action: string
 }): string[] {
   const args: string[] = []
@@ -94,6 +121,16 @@ export function buildXcodebuildArgs(opts: {
   args.push('-resultBundlePath', opts.resultBundlePath)
   if (opts.archivePath) args.push('-archivePath', opts.archivePath)
 
+  if (opts.allowProvisioningUpdates) args.push('-allowProvisioningUpdates')
+  if (opts.allowProvisioningDeviceRegistration)
+    args.push('-allowProvisioningDeviceRegistration')
+  if (opts.authenticationKeyPath)
+    args.push('-authenticationKeyPath', opts.authenticationKeyPath)
+  if (opts.authenticationKeyId)
+    args.push('-authenticationKeyID', opts.authenticationKeyId)
+  if (opts.authenticationKeyIssuerId)
+    args.push('-authenticationKeyIssuerID', opts.authenticationKeyIssuerId)
+
   if (opts.buildNumber) {
     args.push(`CURRENT_PROJECT_VERSION=${opts.buildNumber}`)
   }
@@ -108,6 +145,46 @@ export function buildXcodebuildArgs(opts: {
   }
 
   args.push(opts.action)
+  return args
+}
+
+export function buildExportArgs(opts: {
+  exportOptionsPlist: string
+  archivePath: string
+  exportPath: string
+  allowProvisioningUpdates?: boolean
+  allowProvisioningDeviceRegistration?: boolean
+  authenticationKeyPath?: string
+  authenticationKeyId?: string
+  authenticationKeyIssuerId?: string
+  exportExtraArguments?: string
+  extraArguments?: string
+}): string[] {
+  const args: string[] = [
+    '-exportArchive',
+    '-exportOptionsPlist',
+    opts.exportOptionsPlist,
+    '-archivePath',
+    opts.archivePath,
+    '-exportPath',
+    opts.exportPath
+  ]
+
+  if (opts.allowProvisioningUpdates) args.push('-allowProvisioningUpdates')
+  if (opts.allowProvisioningDeviceRegistration)
+    args.push('-allowProvisioningDeviceRegistration')
+  if (opts.authenticationKeyPath)
+    args.push('-authenticationKeyPath', opts.authenticationKeyPath)
+  if (opts.authenticationKeyId)
+    args.push('-authenticationKeyID', opts.authenticationKeyId)
+  if (opts.authenticationKeyIssuerId)
+    args.push('-authenticationKeyIssuerID', opts.authenticationKeyIssuerId)
+
+  const extra = opts.exportExtraArguments || opts.extraArguments
+  if (extra) {
+    args.push(...tokenize(extra))
+  }
+
   return args
 }
 

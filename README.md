@@ -37,6 +37,26 @@ See [`Apple-Actions/Example-macOS`](https://github.com/Apple-Actions/Example-mac
     build-number: ${{ github.run_number }}
 ```
 
+### Automatic signing with App Store Connect API Key
+
+Pass App Store Connect API key credentials directly to automatically update or download provisioning profiles during archive and export:
+
+```yaml
+- id: build
+  uses: Apple-Actions/xcodebuild@v1
+  with:
+    project: App.xcodeproj
+    scheme: App
+    action: archive
+    archive-path: .build/Archives/App.xcarchive
+    export-options-plist: ExportOptions.plist
+    build-number: ${{ github.run_number }}
+    allow-provisioning-updates: true
+    authentication-key-path: ${{ steps.setup.outputs.auth-key-path }}
+    authentication-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+    authentication-key-issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+```
+
 ### Build for testing, then run tests
 
 Split compile and XCTest into two steps in the same job so build failures and test failures show separately. Both steps share the default DerivedData (`.build/DerivedData`); override `log-path` or `result-bundle-path` only if you need distinct artifacts beyond the defaults.
@@ -143,7 +163,13 @@ In an App Store macOS `ExportOptions.plist`, `installerSigningCertificate` is `3
 | `result-bundle-path` | Path for the `.xcresult` bundle. | `.build/Artifacts/<scheme>.xcresult` |
 | `build-number` | Value passed as `CURRENT_PROJECT_VERSION`. | — |
 | `build-settings` | Additional `KEY=VALUE` build settings, one per line. | — |
-| `extra-arguments` | Additional arguments passed verbatim to `xcodebuild`. | — |
+| `extra-arguments` | Additional arguments passed verbatim to `xcodebuild`. Also forwarded to `-exportArchive` unless `export-extra-arguments` is specified. | — |
+| `export-extra-arguments` | Additional arguments passed verbatim to `xcodebuild -exportArchive`. Defaults to `extra-arguments` if omitted. | — |
+| `allow-provisioning-updates` | Pass `-allowProvisioningUpdates` to `xcodebuild` during build, archive, and export. | `false` |
+| `allow-provisioning-device-registration` | Pass `-allowProvisioningDeviceRegistration` to `xcodebuild`. Only takes effect if `allow-provisioning-updates` is `true`. | `false` |
+| `authentication-key-path` | Path to an App Store Connect API authentication key (`.p8`). Passed as `-authenticationKeyPath`. | — |
+| `authentication-key-id` | App Store Connect API key ID. Passed as `-authenticationKeyID`. | — |
+| `authentication-key-issuer-id` | App Store Connect API issuer ID. Passed as `-authenticationKeyIssuerID`. | — |
 | `output-formatter` | Command to pipe output through (`xcbeautify`, `xcpretty`, or empty). The default enables xcbeautify's `github-actions` renderer so compile errors/warnings surface as inline PR annotations. | `xcbeautify --renderer github-actions` |
 | `log-path` | Path to write the raw xcodebuild log. | `.build/<scheme>-<action>.log` |
 | `parallelize-targets` | Pass `-parallelizeTargets`. | `true` |

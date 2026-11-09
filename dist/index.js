@@ -20385,7 +20385,17 @@ function tokenize(input) {
   return out;
 }
 function validateInputs(opts) {
-  const { workspace, project, xcAction, archivePath, exportOptionsPlist, cwd } = opts;
+  const {
+    workspace,
+    project,
+    xcAction,
+    archivePath,
+    exportOptionsPlist,
+    cwd,
+    authenticationKeyPath,
+    authenticationKeyId,
+    authenticationKeyIssuerId
+  } = opts;
   const exportOnly = xcAction === "export";
   if (!exportOnly && !workspace && !project) {
     throw new Error("Either `workspace` or `project` must be provided.");
@@ -20411,6 +20421,16 @@ function validateInputs(opts) {
   if (exportOnly && !existsSync2(resolve2(cwd, archivePath))) {
     throw new Error(`Archive not found: ${archivePath}`);
   }
+  const authKeyCount = [
+    Boolean(authenticationKeyPath),
+    Boolean(authenticationKeyId),
+    Boolean(authenticationKeyIssuerId)
+  ].filter(Boolean).length;
+  if (authKeyCount > 0 && authKeyCount < 3) {
+    throw new Error(
+      "When using App Store Connect API authentication, `authentication-key-path`, `authentication-key-id`, and `authentication-key-issuer-id` must all be provided together."
+    );
+  }
 }
 function buildXcodebuildArgs(opts) {
   const args = [];
@@ -20427,6 +20447,15 @@ function buildXcodebuildArgs(opts) {
   args.push("-derivedDataPath", opts.derivedDataPath);
   args.push("-resultBundlePath", opts.resultBundlePath);
   if (opts.archivePath) args.push("-archivePath", opts.archivePath);
+  if (opts.allowProvisioningUpdates) args.push("-allowProvisioningUpdates");
+  if (opts.allowProvisioningDeviceRegistration)
+    args.push("-allowProvisioningDeviceRegistration");
+  if (opts.authenticationKeyPath)
+    args.push("-authenticationKeyPath", opts.authenticationKeyPath);
+  if (opts.authenticationKeyId)
+    args.push("-authenticationKeyID", opts.authenticationKeyId);
+  if (opts.authenticationKeyIssuerId)
+    args.push("-authenticationKeyIssuerID", opts.authenticationKeyIssuerId);
   if (opts.buildNumber) {
     args.push(`CURRENT_PROJECT_VERSION=${opts.buildNumber}`);
   }
@@ -20440,6 +20469,31 @@ function buildXcodebuildArgs(opts) {
     args.push(...tokenize(opts.extraArguments));
   }
   args.push(opts.action);
+  return args;
+}
+function buildExportArgs(opts) {
+  const args = [
+    "-exportArchive",
+    "-exportOptionsPlist",
+    opts.exportOptionsPlist,
+    "-archivePath",
+    opts.archivePath,
+    "-exportPath",
+    opts.exportPath
+  ];
+  if (opts.allowProvisioningUpdates) args.push("-allowProvisioningUpdates");
+  if (opts.allowProvisioningDeviceRegistration)
+    args.push("-allowProvisioningDeviceRegistration");
+  if (opts.authenticationKeyPath)
+    args.push("-authenticationKeyPath", opts.authenticationKeyPath);
+  if (opts.authenticationKeyId)
+    args.push("-authenticationKeyID", opts.authenticationKeyId);
+  if (opts.authenticationKeyIssuerId)
+    args.push("-authenticationKeyIssuerID", opts.authenticationKeyIssuerId);
+  const extra = opts.exportExtraArguments || opts.extraArguments;
+  if (extra) {
+    args.push(...tokenize(extra));
+  }
   return args;
 }
 function findExportArtifacts(exportPath, cwd = process.cwd()) {
@@ -20482,6 +20536,16 @@ async function run() {
     const buildNumber = getInput("build-number");
     const buildSettingsInput = getInput("build-settings");
     const extraArguments = getInput("extra-arguments");
+    const exportExtraArguments = getInput("export-extra-arguments");
+    const allowProvisioningUpdates = getBooleanInput(
+      "allow-provisioning-updates"
+    );
+    const allowProvisioningDeviceRegistration = getBooleanInput(
+      "allow-provisioning-device-registration"
+    );
+    const rawAuthKeyPath = getInput("authentication-key-path");
+    const authenticationKeyId = getInput("authentication-key-id");
+    const authenticationKeyIssuerId = getInput("authentication-key-issuer-id");
     const outputFormatter = getInput("output-formatter");
     const logPathInput = getInput("log-path");
     const parallelizeTargets = getBooleanInput("parallelize-targets");
@@ -20494,13 +20558,17 @@ async function run() {
     const workingDirectoryInput = getInput("working-directory");
     const exportOnly = xcAction === "export";
     const cwd = workingDirectoryInput ? resolve3(workingDirectoryInput) : process.cwd();
+    const authenticationKeyPath = rawAuthKeyPath ? resolve3(cwd, rawAuthKeyPath) : "";
     validateInputs({
       workspace,
       project,
       xcAction,
       archivePath: archivePathInput,
       exportOptionsPlist,
-      cwd
+      cwd,
+      authenticationKeyPath,
+      authenticationKeyId,
+      authenticationKeyIssuerId
     });
     const resultBundlePath = resultBundlePathInput || join4(".build", "Artifacts", `${scheme}.xcresult`);
     const logPath = logPathInput || defaultLogPath(scheme, xcAction);
@@ -20528,6 +20596,11 @@ async function run() {
         buildNumber,
         buildSettings: buildSettingsInput,
         extraArguments,
+        allowProvisioningUpdates,
+        allowProvisioningDeviceRegistration,
+        authenticationKeyPath,
+        authenticationKeyId,
+        authenticationKeyIssuerId,
         action: xcAction
       });
       await runXcodebuild(args, outputFormatter, logPath, cwd, false);
@@ -20539,15 +20612,18 @@ async function run() {
     if (exportOptionsPlist && archivePath) {
       exportPath = exportPathInput || join4(dirname3(resultBundlePath), `${scheme}.ipa`);
       mkdirSync(resolve3(cwd, exportPath), { recursive: true });
-      const exportArgs = [
-        "-exportArchive",
-        "-exportOptionsPlist",
+      const exportArgs = buildExportArgs({
         exportOptionsPlist,
-        "-archivePath",
         archivePath,
-        "-exportPath",
-        exportPath
-      ];
+        exportPath,
+        allowProvisioningUpdates,
+        allowProvisioningDeviceRegistration,
+        authenticationKeyPath,
+        authenticationKeyId,
+        authenticationKeyIssuerId,
+        exportExtraArguments,
+        extraArguments
+      });
       await runXcodebuild(exportArgs, outputFormatter, logPath, cwd, true);
       ({ ipaPath, appPath, pkgPath } = findExportArtifacts(exportPath, cwd));
     }

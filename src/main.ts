@@ -9,6 +9,7 @@ import {exec} from '@actions/exec'
 import {existsSync, mkdirSync, rmSync} from 'node:fs'
 import {dirname, join, resolve} from 'node:path'
 import {
+  buildExportArgs,
   buildPipeline,
   buildXcodebuildArgs,
   defaultLogPath,
@@ -35,6 +36,16 @@ async function run(): Promise<void> {
     const buildNumber = getInput('build-number')
     const buildSettingsInput = getInput('build-settings')
     const extraArguments = getInput('extra-arguments')
+    const exportExtraArguments = getInput('export-extra-arguments')
+    const allowProvisioningUpdates = getBooleanInput(
+      'allow-provisioning-updates'
+    )
+    const allowProvisioningDeviceRegistration = getBooleanInput(
+      'allow-provisioning-device-registration'
+    )
+    const rawAuthKeyPath = getInput('authentication-key-path')
+    const authenticationKeyId = getInput('authentication-key-id')
+    const authenticationKeyIssuerId = getInput('authentication-key-issuer-id')
     const outputFormatter = getInput('output-formatter')
     const logPathInput = getInput('log-path')
     const parallelizeTargets = getBooleanInput('parallelize-targets')
@@ -51,13 +62,20 @@ async function run(): Promise<void> {
       ? resolve(workingDirectoryInput)
       : process.cwd()
 
+    const authenticationKeyPath = rawAuthKeyPath
+      ? resolve(cwd, rawAuthKeyPath)
+      : ''
+
     validateInputs({
       workspace,
       project,
       xcAction,
       archivePath: archivePathInput,
       exportOptionsPlist,
-      cwd
+      cwd,
+      authenticationKeyPath,
+      authenticationKeyId,
+      authenticationKeyIssuerId
     })
 
     const resultBundlePath =
@@ -90,6 +108,11 @@ async function run(): Promise<void> {
         buildNumber,
         buildSettings: buildSettingsInput,
         extraArguments,
+        allowProvisioningUpdates,
+        allowProvisioningDeviceRegistration,
+        authenticationKeyPath,
+        authenticationKeyId,
+        authenticationKeyIssuerId,
         action: xcAction
       })
 
@@ -104,15 +127,18 @@ async function run(): Promise<void> {
       exportPath =
         exportPathInput || join(dirname(resultBundlePath), `${scheme}.ipa`)
       mkdirSync(resolve(cwd, exportPath), {recursive: true})
-      const exportArgs = [
-        '-exportArchive',
-        '-exportOptionsPlist',
+      const exportArgs = buildExportArgs({
         exportOptionsPlist,
-        '-archivePath',
         archivePath,
-        '-exportPath',
-        exportPath
-      ]
+        exportPath,
+        allowProvisioningUpdates,
+        allowProvisioningDeviceRegistration,
+        authenticationKeyPath,
+        authenticationKeyId,
+        authenticationKeyIssuerId,
+        exportExtraArguments,
+        extraArguments
+      })
       await runXcodebuild(exportArgs, outputFormatter, logPath, cwd, true)
       ;({ipaPath, appPath, pkgPath} = findExportArtifacts(exportPath, cwd))
     }

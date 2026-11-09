@@ -3,6 +3,7 @@ import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {afterEach, describe, expect, it} from 'vitest'
 import {
+  buildExportArgs,
   buildPipeline,
   buildXcodebuildArgs,
   defaultLogPath,
@@ -153,6 +154,39 @@ describe('validateInputs', () => {
       })
     ).not.toThrow()
   })
+
+  it('validates that App Store Connect API auth parameters are provided together', () => {
+    expect(() =>
+      validateInputs({
+        ...base,
+        workspace: 'App.xcworkspace',
+        authenticationKeyPath: '/path/to/AuthKey.p8'
+      })
+    ).toThrow(
+      'When using App Store Connect API authentication, `authentication-key-path`, `authentication-key-id`, and `authentication-key-issuer-id` must all be provided together.'
+    )
+
+    expect(() =>
+      validateInputs({
+        ...base,
+        workspace: 'App.xcworkspace',
+        authenticationKeyPath: '/path/to/AuthKey.p8',
+        authenticationKeyId: 'KEY123'
+      })
+    ).toThrow(
+      'When using App Store Connect API authentication, `authentication-key-path`, `authentication-key-id`, and `authentication-key-issuer-id` must all be provided together.'
+    )
+
+    expect(() =>
+      validateInputs({
+        ...base,
+        workspace: 'App.xcworkspace',
+        authenticationKeyPath: '/path/to/AuthKey.p8',
+        authenticationKeyId: 'KEY123',
+        authenticationKeyIssuerId: 'ISSUER456'
+      })
+    ).not.toThrow()
+  })
 })
 
 describe('buildXcodebuildArgs', () => {
@@ -277,6 +311,30 @@ describe('buildXcodebuildArgs', () => {
     expect(args).toContain('OTHER=1 2')
   })
 
+  it('includes provisioning update and authentication key flags', () => {
+    const args = buildXcodebuildArgs({
+      ...base,
+      workspace: 'W',
+      allowProvisioningUpdates: true,
+      allowProvisioningDeviceRegistration: true,
+      authenticationKeyPath: '/path/to/AuthKey.p8',
+      authenticationKeyId: 'KEY123',
+      authenticationKeyIssuerId: 'ISSUER456'
+    })
+    expect(args).toContain('-allowProvisioningUpdates')
+    expect(args).toContain('-allowProvisioningDeviceRegistration')
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-authenticationKeyPath',
+        '/path/to/AuthKey.p8',
+        '-authenticationKeyID',
+        'KEY123',
+        '-authenticationKeyIssuerID',
+        'ISSUER456'
+      ])
+    )
+  })
+
   it('puts action as the last element', () => {
     const args = buildXcodebuildArgs({
       ...base,
@@ -286,6 +344,68 @@ describe('buildXcodebuildArgs', () => {
       extraArguments: '-quiet'
     })
     expect(args.at(-1)).toBe('archive')
+  })
+})
+
+describe('buildExportArgs', () => {
+  const base = {
+    exportOptionsPlist: 'ExportOptions.plist',
+    archivePath: '.build/Archives/App.xcarchive',
+    exportPath: '.build/Artifacts/App.ipa'
+  }
+
+  it('constructs basic export command arguments', () => {
+    expect(buildExportArgs(base)).toEqual([
+      '-exportArchive',
+      '-exportOptionsPlist',
+      'ExportOptions.plist',
+      '-archivePath',
+      '.build/Archives/App.xcarchive',
+      '-exportPath',
+      '.build/Artifacts/App.ipa'
+    ])
+  })
+
+  it('includes provisioning update and authentication key flags', () => {
+    const args = buildExportArgs({
+      ...base,
+      allowProvisioningUpdates: true,
+      allowProvisioningDeviceRegistration: true,
+      authenticationKeyPath: '/path/to/AuthKey.p8',
+      authenticationKeyId: 'KEY123',
+      authenticationKeyIssuerId: 'ISSUER456'
+    })
+    expect(args).toContain('-allowProvisioningUpdates')
+    expect(args).toContain('-allowProvisioningDeviceRegistration')
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-authenticationKeyPath',
+        '/path/to/AuthKey.p8',
+        '-authenticationKeyID',
+        'KEY123',
+        '-authenticationKeyIssuerID',
+        'ISSUER456'
+      ])
+    )
+  })
+
+  it('forwards extra-arguments when export-extra-arguments is not provided', () => {
+    const args = buildExportArgs({
+      ...base,
+      extraArguments: '-allowProvisioningUpdates -quiet'
+    })
+    expect(args).toContain('-allowProvisioningUpdates')
+    expect(args).toContain('-quiet')
+  })
+
+  it('uses export-extra-arguments over extra-arguments when provided', () => {
+    const args = buildExportArgs({
+      ...base,
+      extraArguments: '-quiet',
+      exportExtraArguments: '-allowProvisioningUpdates'
+    })
+    expect(args).toContain('-allowProvisioningUpdates')
+    expect(args).not.toContain('-quiet')
   })
 })
 
